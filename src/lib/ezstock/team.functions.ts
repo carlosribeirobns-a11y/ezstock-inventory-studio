@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { canAssignRole } from "./team-rules";
+import { canAssignRole, canResetPassword } from "./team-rules";
 
 const roleSchema = z.enum(["admin", "colaborador", "super_admin"]);
 const newUserSchema = z.object({
@@ -45,10 +45,17 @@ export const setupFirstAdmin = createServerFn({ method: "POST" })
   });
 
 
-/** Admin creates a team member with a temporary password. */
+const passwordSchema = z.string().min(8, "A senha precisa ter pelo menos 8 caracteres.").max(72);
+const redirectSchema = z.string().url().max(500);
+const createMemberSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("invite"), fullName: newUserSchema.shape.fullName, email: newUserSchema.shape.email, role: roleSchema, redirectTo: redirectSchema }),
+  z.object({ mode: z.literal("password"), fullName: newUserSchema.shape.fullName, email: newUserSchema.shape.email, role: roleSchema, password: passwordSchema, mustChange: z.boolean() }),
+]);
+
+/** Admin creates a team member: email invite with activation link, or a temporary/fixed password. */
 export const createTeamMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => newUserSchema.extend({ role: roleSchema }).parse(input))
+  .inputValidator((input: unknown) => createMemberSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { data: isAdmin } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
     if (!isAdmin) throw new Error("Somente administradores podem gerenciar usuários.");
@@ -57,19 +64,75 @@ export const createTeamMember = createServerFn({ method: "POST" })
     const actor = { id: context.userId, role: "admin" as const, isPrimary: (authority ?? []).some((r) => r.is_primary_superadmin) };
     if (!canAssignRole(actor, data.role)) throw new Error("Somente o Superadministrador titular pode criar Superadministradores.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-      email: data.email,
-      password: data.password,
-      email_confirm: true,
-      user_metadata: { full_name: data.fullName },
-    });
-    if (error || !created.user) throw new Error(friendlyAuthError(error?.message ?? "Não foi possível criar a conta."));
+    const result =
+      data.mode === "invite"
+        ? await supabaseAdmin.auth.admin.inviteUserByEmail(data.email, { data: { full_name: data.fullName }, redirectTo: new URL("/reset-password", data.redirectTo).toString() })
+        : await supabaseAdmin.auth.admin.createUser({
+            email: data.email,
+            password: data.password,
+            email_confirm: true,
+            user_metadata: { full_name: data.fullName },
+            app_metadata: { must_change_password: data.mustChange },
+          });
+    const created = result.data;
+    if (result.error || !created.user) throw new Error(friendlyAuthError(result.error?.message ?? "Não foi possível criar a conta."));
     const { error: roleError } = await supabaseAdmin.from("user_roles").insert({ user_id: created.user.id, role: data.role });
     if (roleError) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error("Não foi possível definir o perfil de acesso.");
     }
     return { id: created.user.id };
+  });
+
+/** Superadministrator resets a member's password: email link, temporary (must change) or fixed password. */
+export const resetMemberPassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.discriminatedUnion("mode", [
+      z.object({ mode: z.literal("email"), userId: z.string().uuid(), redirectTo: redirectSchema }),
+      z.object({ mode: z.enum(["temporary", "fixed"]), userId: z.string().uuid(), password: passwordSchema }),
+    ]).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const [{ data: mine }, { data: theirs }] = await Promise.all([
+      context.supabase.from("user_roles").select("role, is_primary_superadmin").eq("user_id", context.userId),
+      context.supabase.from("user_roles").select("role, is_primary_superadmin").eq("user_id", data.userId),
+    ]);
+    const pick = (rows: { role: string; is_primary_superadmin: boolean }[] | null, id: string) => {
+      const roles = (rows ?? []).map((r) => r.role);
+      const role = roles.includes("super_admin") ? "super_admin" : roles.includes("admin") ? "admin" : roles.includes("colaborador") ? "colaborador" : null;
+      return { id, role: role as "super_admin" | "admin" | "colaborador" | null, isPrimary: (rows ?? []).some((r) => r.is_primary_superadmin) };
+    };
+    if (!canResetPassword(pick(mine, context.userId), pick(theirs, data.userId)))
+      throw new Error("Você não tem permissão para redefinir a senha desta conta.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (data.mode === "email") {
+      const { data: target, error } = await supabaseAdmin.auth.admin.getUserById(data.userId);
+      if (error || !target.user?.email) throw new Error("Conta não encontrada.");
+      const { error: sendError } = await supabaseAdmin.auth.resetPasswordForEmail(target.user.email, { redirectTo: new URL("/reset-password", data.redirectTo).toString() });
+      if (sendError) throw new Error("Não foi possível enviar o e-mail de redefinição.");
+      return { ok: true };
+    }
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+      password: data.password,
+      app_metadata: { must_change_password: data.mode === "temporary" },
+    });
+    if (error) throw new Error(friendlyAuthError(error.message));
+    return { ok: true };
+  });
+
+/** Signed-in member replaces a temporary password and clears the forced-change flag. */
+export const completePasswordChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ password: passwordSchema }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(context.userId, {
+      password: data.password,
+      app_metadata: { must_change_password: false },
+    });
+    if (error) throw new Error(friendlyAuthError(error.message));
+    return { ok: true };
   });
 
 /** Admin changes a member's role; the store always keeps at least one administrator. */

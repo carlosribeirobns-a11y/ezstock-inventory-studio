@@ -13,3 +13,7 @@ export function canRemoveAccount(actor: AccountAuthority, target: AccountTarget)
 export function canAssignRole(actor: AccountAuthority, role: AppRole) {
   return (actor.role === "admin" || actor.role === "super_admin") && (role !== "super_admin" || actor.isPrimary);
 }
+/** Only superadministrators reset someone else's password, within the accounts they may manage. */
+export function canResetPassword(actor: AccountAuthority, target: AccountTarget) {
+  return actor.role === "super_admin" && actor.id !== target.id && canManageAccount(actor, target);
+}

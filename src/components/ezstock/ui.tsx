@@ -27,6 +27,7 @@ const paths: Record<string, ReactNode> = {
   check: <><path d="m5 12 4 4L19 6" /></>,
   trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></>,
   pause: <><circle cx="12" cy="12" r="9" /><path d="M9 8v8M15 8v8" /></>,
+  key: <><circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14 9l2 2" /></>,
 };
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {

@@ -5,6 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Icon, Status, useGo } from "@/components/ezstock/ui";
 import { collaboratorPages, initialsOf, nav, pagePath, roleLabel } from "@/lib/ezstock/data";
 import { meQuery, productsQuery } from "@/lib/ezstock/queries";
+import { useServerFn } from "@tanstack/react-start";
+import type { FormEvent } from "react";
+import { completePasswordChange } from "@/lib/ezstock/team.functions";
 
 /** Signed-in panel: sidebar, top bar and the current screen. */
 export const Route = createFileRoute("/_authenticated/_painel")({
@@ -53,6 +56,8 @@ function PainelLayout() {
       </main>
     );
   }
+
+  if (me.mustChangePassword) return <ForcedPasswordChange onSignOut={signOut} />;
 
   const isAdmin = me.role === "admin" || me.role === "super_admin";
   const visibleNav = isAdmin ? nav : nav.filter((item) => collaboratorPages.includes(item.id));
@@ -144,5 +149,46 @@ function Notifications() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Blocks the panel until a member replaces the temporary password set by an administrator. */
+function ForcedPasswordChange({ onSignOut }: { onSignOut: () => void }) {
+  const queryClient = useQueryClient();
+  const complete = useServerFn(completePasswordChange);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (password.length < 8) return setError("A senha precisa ter pelo menos 8 caracteres.");
+    if (password !== confirm) return setError("As senhas não conferem.");
+    setBusy(true); setError("");
+    try {
+      await complete({ data: { password } });
+      await supabase.auth.refreshSession();
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível salvar a nova senha.");
+    } finally { setBusy(false); }
+  };
+  return (
+    <main className="login-page single">
+      <section className="login-form-wrap">
+        <form className="login-form" onSubmit={submit}>
+          <div className="mobile-logo show"><div className="logo-mark"><Icon name="box" /></div><strong>EzStock</strong></div>
+          <span className="eyebrow blue">PRIMEIRO ACESSO</span>
+          <h2>Atualize sua senha provisória</h2>
+          <p>Por segurança, crie uma senha pessoal com pelo menos 8 caracteres antes de continuar.</p>
+          <label className="field"><span>Nova senha</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required /></label>
+          <label className="field"><span>Confirme a nova senha</span><input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required /></label>
+          {error && <div className="inline-error"><Icon name="alert" size={17} />{error}</div>}
+          <div className="form-row" />
+          <button className="btn primary" type="submit" disabled={busy}>{busy ? "Salvando..." : "Salvar e continuar"}</button>
+          <div className="form-row"><button type="button" className="link-button" onClick={onSignOut}>Sair da conta</button></div>
+        </form>
+      </section>
+    </main>
   );
 }

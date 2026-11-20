@@ -21,3 +21,9 @@ describe("team account permissions", () => {
     expect(canRemoveAccount(primary, primary)).toBe(false);
   });
 });
+import { canResetPassword } from "@/lib/ezstock/team-rules";
+describe("password resets", () => {
+  it("lets a superadministrator reset a collaborator's password", () => expect(canResetPassword(primary, collaborator)).toBe(true));
+  it("does not let a regular administrator reset passwords", () => expect(canResetPassword(admin, collaborator)).toBe(false));
+  it("does not let anyone reset the primary superadministrator's password", () => expect(canResetPassword({ id: "s", role: "super_admin", isPrimary: false }, primary)).toBe(false));
+});

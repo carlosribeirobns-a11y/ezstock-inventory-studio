@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole, MovementType } from "./data";
 
-export type Me = { id: string; email: string; fullName: string; role: AppRole | null; active: boolean; isPrimary: boolean };
+export type Me = { id: string; email: string; fullName: string; role: AppRole | null; active: boolean; isPrimary: boolean; mustChangePassword: boolean };
 
 export const meQuery = queryOptions({
   queryKey: ["me"],
@@ -26,6 +26,7 @@ export const meQuery = queryOptions({
       role,
       active,
       isPrimary: (roles ?? []).some((r) => r.is_primary_superadmin),
+      mustChangePassword: user.app_metadata?.["must_change_password"] === true,
     };
   },
 });

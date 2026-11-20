@@ -38,3 +38,4 @@ use the editor.
 - Signed-in screens live under `_authenticated` (client-only gate, redirects to `/auth`) and the nested pathless `_painel` layout (sidebar/top bar); keep one route file per screen.
 - Pure stock and report rules live in `src/lib/ezstock/data.ts` and `reports.ts` so they can be unit-tested; screens call them instead of inlining checks.
 - Visual styling is plain CSS classes in `src/styles.css` ported from the prototype, using the oklch tokens defined in `:root`; reuse those classes rather than adding ad hoc colors.
+- The forced first-login password change flag lives in auth app_metadata (`must_change_password`, writable only by server functions) so members cannot clear it themselves; the panel layout blocks access until `completePasswordChange` clears it.
