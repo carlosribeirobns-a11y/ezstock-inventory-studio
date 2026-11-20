@@ -28,3 +28,10 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+
+- EzStock app state (login, role, products, movements, toast) lives in an in-memory React context (`src/lib/ezstock/store.tsx`) mounted in `__root`; it mirrors the original Figma Make prototype, so data resets on reload until a backend is added.
+- Signed-in screens are children of the pathless `_painel` layout route, which renders the sidebar/top bar and redirects logged-out visitors to `/` (the login); keep one route file per screen.
+- Pure stock rules (status, movement and adjustment validation, demo role) live in `src/lib/ezstock/data.ts` so they can be unit-tested; screens call them instead of inlining checks.
+- Visual styling is plain CSS classes in `src/styles.css` ported from the prototype, using the oklch tokens defined in `:root`; reuse those classes rather than adding ad hoc colors.

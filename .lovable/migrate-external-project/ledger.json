@@ -1,0 +1,110 @@
+{
+  "source": "code-archive (Figma Make: EzStock protótipo navegável)",
+  "capabilities": [
+    {
+      "capability": "code",
+      "source": "src/App.tsx single-component React SPA",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "routes",
+      "source": "state-based page switcher: login + 9 panel screens",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "theme",
+      "source": "src/index.css custom CSS + Inter font",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "records",
+      "source": "in-memory seed arrays (products, movements, categories, suppliers, users)",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "schema",
+      "source": "absent (no database)",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": "None unless user asks for a real backend"
+    },
+    {
+      "capability": "auth identities",
+      "source": "demo-only login, no real accounts",
+      "outcome": "preserve_demo",
+      "status": "verified",
+      "next_action": "Demo login kept as in source; awaiting user answer on whether to add real accounts with Lovable Cloud"
+    },
+    {
+      "capability": "authorization",
+      "source": "client-side role gating (Administrador / Colaborador)",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "uploaded file bytes",
+      "source": "none",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "external providers",
+      "source": "none",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "public endpoints / callbacks / webhooks",
+      "source": "none",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "schedules",
+      "source": "none",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "secrets",
+      "source": "FIGMA_PUBLIC_URL, FIGMA_DEV_SERVER_HOST, PORT are Figma platform runtime metadata",
+      "outcome": "not_applicable",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "site metadata",
+      "source": ".figma/make/site.json description + robots noindex",
+      "outcome": "migrate",
+      "status": "verified",
+      "next_action": "None"
+    },
+    {
+      "capability": "cutover",
+      "source": "Figma Make hosting",
+      "outcome": "user_action",
+      "status": "pending",
+      "next_action": "User publishes from Lovable when ready"
+    },
+    {
+      "capability": "verification",
+      "source": "-",
+      "outcome": "verify",
+      "status": "verified",
+      "next_action": "None (build OK, 8 tests pass, browser walk-through of login, exit block, exit, adjustment, history, product edit, reports, collaborator gating, logged-out redirect)"
+    }
+  ]
+}

@@ -10,33 +10,153 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PainelRouteImport } from './routes/_painel'
+import { Route as PainelAjustesRouteImport } from './routes/_painel/ajustes'
+import { Route as PainelCategoriasRouteImport } from './routes/_painel/categorias'
+import { Route as PainelDashboardRouteImport } from './routes/_painel/dashboard'
+import { Route as PainelFornecedoresRouteImport } from './routes/_painel/fornecedores'
+import { Route as PainelHistoricoRouteImport } from './routes/_painel/historico'
+import { Route as PainelMovimentacoesRouteImport } from './routes/_painel/movimentacoes'
+import { Route as PainelProdutosRouteImport } from './routes/_painel/produtos'
+import { Route as PainelRelatoriosRouteImport } from './routes/_painel/relatorios'
+import { Route as PainelUsuariosRouteImport } from './routes/_painel/usuarios'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PainelRoute = PainelRouteImport.update({
+  id: '/_painel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PainelAjustesRoute = PainelAjustesRouteImport.update({
+  id: '/ajustes',
+  path: '/ajustes',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelCategoriasRoute = PainelCategoriasRouteImport.update({
+  id: '/categorias',
+  path: '/categorias',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelDashboardRoute = PainelDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelFornecedoresRoute = PainelFornecedoresRouteImport.update({
+  id: '/fornecedores',
+  path: '/fornecedores',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelHistoricoRoute = PainelHistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelMovimentacoesRoute = PainelMovimentacoesRouteImport.update({
+  id: '/movimentacoes',
+  path: '/movimentacoes',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelProdutosRoute = PainelProdutosRouteImport.update({
+  id: '/produtos',
+  path: '/produtos',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelRelatoriosRoute = PainelRelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelUsuariosRoute = PainelUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => PainelRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ajustes': typeof PainelAjustesRoute
+  '/categorias': typeof PainelCategoriasRoute
+  '/dashboard': typeof PainelDashboardRoute
+  '/fornecedores': typeof PainelFornecedoresRoute
+  '/historico': typeof PainelHistoricoRoute
+  '/movimentacoes': typeof PainelMovimentacoesRoute
+  '/produtos': typeof PainelProdutosRoute
+  '/relatorios': typeof PainelRelatoriosRoute
+  '/usuarios': typeof PainelUsuariosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ajustes': typeof PainelAjustesRoute
+  '/categorias': typeof PainelCategoriasRoute
+  '/dashboard': typeof PainelDashboardRoute
+  '/fornecedores': typeof PainelFornecedoresRoute
+  '/historico': typeof PainelHistoricoRoute
+  '/movimentacoes': typeof PainelMovimentacoesRoute
+  '/produtos': typeof PainelProdutosRoute
+  '/relatorios': typeof PainelRelatoriosRoute
+  '/usuarios': typeof PainelUsuariosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_painel': typeof PainelRouteWithChildren
+  '/_painel/ajustes': typeof PainelAjustesRoute
+  '/_painel/categorias': typeof PainelCategoriasRoute
+  '/_painel/dashboard': typeof PainelDashboardRoute
+  '/_painel/fornecedores': typeof PainelFornecedoresRoute
+  '/_painel/historico': typeof PainelHistoricoRoute
+  '/_painel/movimentacoes': typeof PainelMovimentacoesRoute
+  '/_painel/produtos': typeof PainelProdutosRoute
+  '/_painel/relatorios': typeof PainelRelatoriosRoute
+  '/_painel/usuarios': typeof PainelUsuariosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/ajustes'
+    | '/categorias'
+    | '/dashboard'
+    | '/fornecedores'
+    | '/historico'
+    | '/movimentacoes'
+    | '/produtos'
+    | '/relatorios'
+    | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/ajustes'
+    | '/categorias'
+    | '/dashboard'
+    | '/fornecedores'
+    | '/historico'
+    | '/movimentacoes'
+    | '/produtos'
+    | '/relatorios'
+    | '/usuarios'
+  id:
+    | '__root__'
+    | '/'
+    | '/_painel'
+    | '/_painel/ajustes'
+    | '/_painel/categorias'
+    | '/_painel/dashboard'
+    | '/_painel/fornecedores'
+    | '/_painel/historico'
+    | '/_painel/movimentacoes'
+    | '/_painel/produtos'
+    | '/_painel/relatorios'
+    | '/_painel/usuarios'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PainelRoute: typeof PainelRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +168,109 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_painel': {
+      id: '/_painel'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof PainelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_painel/ajustes': {
+      id: '/_painel/ajustes'
+      path: '/ajustes'
+      fullPath: '/ajustes'
+      preLoaderRoute: typeof PainelAjustesRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/_painel/categorias': {
+      id: '/_painel/categorias'
+      path: '/categorias'
+      fullPath: '/categorias'
+      preLoaderRoute: typeof PainelCategoriasRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/_painel/dashboard': {
+      id: '/_painel/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof PainelDashboardRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/_painel/fornecedores': {
+      id: '/_painel/fornecedores'
+      path: '/fornecedores'
+      fullPath: '/fornecedores'
+      preLoaderRoute: typeof PainelFornecedoresRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/_painel/historico': {
+      id: '/_painel/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof PainelHistoricoRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/_painel/movimentacoes': {
+      id: '/_painel/movimentacoes'
+      path: '/movimentacoes'
+      fullPath: '/movimentacoes'
+      preLoaderRoute: typeof PainelMovimentacoesRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/_painel/produtos': {
+      id: '/_painel/produtos'
+      path: '/produtos'
+      fullPath: '/produtos'
+      preLoaderRoute: typeof PainelProdutosRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/_painel/relatorios': {
+      id: '/_painel/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof PainelRelatoriosRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/_painel/usuarios': {
+      id: '/_painel/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof PainelUsuariosRouteImport
+      parentRoute: typeof PainelRoute
+    }
   }
 }
 
+interface PainelRouteChildren {
+  PainelAjustesRoute: typeof PainelAjustesRoute
+  PainelCategoriasRoute: typeof PainelCategoriasRoute
+  PainelDashboardRoute: typeof PainelDashboardRoute
+  PainelFornecedoresRoute: typeof PainelFornecedoresRoute
+  PainelHistoricoRoute: typeof PainelHistoricoRoute
+  PainelMovimentacoesRoute: typeof PainelMovimentacoesRoute
+  PainelProdutosRoute: typeof PainelProdutosRoute
+  PainelRelatoriosRoute: typeof PainelRelatoriosRoute
+  PainelUsuariosRoute: typeof PainelUsuariosRoute
+}
+
+const PainelRouteChildren: PainelRouteChildren = {
+  PainelAjustesRoute: PainelAjustesRoute,
+  PainelCategoriasRoute: PainelCategoriasRoute,
+  PainelDashboardRoute: PainelDashboardRoute,
+  PainelFornecedoresRoute: PainelFornecedoresRoute,
+  PainelHistoricoRoute: PainelHistoricoRoute,
+  PainelMovimentacoesRoute: PainelMovimentacoesRoute,
+  PainelProdutosRoute: PainelProdutosRoute,
+  PainelRelatoriosRoute: PainelRelatoriosRoute,
+  PainelUsuariosRoute: PainelUsuariosRoute,
+}
+
+const PainelRouteWithChildren =
+  PainelRoute._addFileChildren(PainelRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PainelRoute: PainelRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
