@@ -34,8 +34,9 @@ function PainelLayout() {
   const go = useGo();
   const signOut = useSignOut();
   const [mobileNav, setMobileNav] = useState(false);
+  const [userMenu, setUserMenu] = useState(false);
 
-  useEffect(() => setMobileNav(false), [pathname]);
+  useEffect(() => { setMobileNav(false); setUserMenu(false); }, [pathname]);
 
   if (!me?.role) {
     return (
@@ -88,7 +89,13 @@ function PainelLayout() {
           <div className="breadcrumb"><span>EzStock</span><Icon name="arrow" size={14} /><strong>{current?.label}</strong></div>
           <div className="top-actions">
             <Notifications />
-            <div className="user-menu"><div>{initialsOf(me.fullName)}</div><span><strong>{me.fullName}</strong><small>{roleLabel[me.role]}</small></span></div>
+            <div className="user-menu-wrap">
+              <button className="user-menu user-menu-trigger" onClick={() => setUserMenu((v) => !v)} aria-label="Menu do usuário" aria-expanded={userMenu}><div>{initialsOf(me.fullName)}</div><span><strong>{me.fullName}</strong><small>{roleLabel[me.role]}</small></span><Icon name="chevron" size={16} /></button>
+              {userMenu && (<>
+                <div className="user-dropdown-backdrop" onClick={() => setUserMenu(false)} />
+                <div className="user-dropdown" role="menu"><button role="menuitem" onClick={signOut}><Icon name="logout" size={16} />Sair da conta</button></div>
+              </>)}
+            </div>
           </div>
         </header>
         <main className="content">
