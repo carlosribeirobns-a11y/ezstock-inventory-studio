@@ -1,67 +1,33 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
-import { movementsSeed, productsSeed, userForRole, type Movement, type Product, type Role } from "./data";
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { Icon } from "@/components/ezstock/ui";
 
-/**
- * In-memory prototype state, same as the original Figma Make prototype:
- * everything resets when the page is reloaded.
- */
-type EzStockState = {
-  logged: boolean;
-  role: Role;
-  currentUser: string;
-  initials: string;
-  products: Product[];
-  movements: Movement[];
-  toast: string;
-  login: (role: Role) => void;
-  logout: () => void;
-  setProducts: (p: Product[]) => void;
-  setMovements: (m: Movement[]) => void;
-  notify: (text: string) => void;
-};
+/** Small confirmation message shown at the bottom right, same as the original prototype. */
+type Notify = (text: string, kind?: "success" | "error") => void;
+const NotifyContext = createContext<Notify | null>(null);
 
-const EzStockContext = createContext<EzStockState | null>(null);
-
-export function EzStockProvider({ children }: { children: ReactNode }) {
-  const [logged, setLogged] = useState(false);
-  const [role, setRole] = useState<Role>("Administrador");
-  const [products, setProducts] = useState<Product[]>(productsSeed);
-  const [movements, setMovements] = useState<Movement[]>(movementsSeed);
-  const [toast, setToast] = useState("");
-  const toastTimer = useRef<number | undefined>(undefined);
-
-  const notify = useCallback((text: string) => {
-    setToast(text);
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(""), 3200);
+export function NotifyProvider({ children }: { children: ReactNode }) {
+  const [toast, setToast] = useState<{ text: string; kind: "success" | "error" } | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const notify = useCallback<Notify>((text, kind = "success") => {
+    setToast({ text, kind });
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setToast(null), 3600);
   }, []);
-
-  const value = useMemo<EzStockState>(() => {
-    const user = userForRole(role);
-    return {
-      logged,
-      role,
-      currentUser: user.name,
-      initials: user.initials,
-      products,
-      movements,
-      toast,
-      login: (r) => {
-        setRole(r);
-        setLogged(true);
-      },
-      logout: () => setLogged(false),
-      setProducts,
-      setMovements,
-      notify,
-    };
-  }, [logged, role, products, movements, toast, notify]);
-
-  return <EzStockContext.Provider value={value}>{children}</EzStockContext.Provider>;
+  return (
+    <NotifyContext.Provider value={notify}>
+      {children}
+      {toast && (
+        <div className={`toast ${toast.kind}`} role="status">
+          <span><Icon name={toast.kind === "error" ? "alert" : "check"} size={16} /></span>
+          {toast.text}
+        </div>
+      )}
+    </NotifyContext.Provider>
+  );
 }
 
-export function useEzStock() {
-  const ctx = useContext(EzStockContext);
-  if (!ctx) throw new Error("useEzStock must be used inside EzStockProvider");
+export function useNotify() {
+  const ctx = useContext(NotifyContext);
+  if (!ctx) throw new Error("useNotify must be used inside NotifyProvider");
   return ctx;
 }

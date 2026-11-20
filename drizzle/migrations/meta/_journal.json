@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1795213082447,
+      "tag": "0000_ezstock_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795213105123,
+      "tag": "0001_ezstock_sample_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795213152289,
+      "tag": "0002_ezstock_needs_setup",
+      "breakpoints": true
+    }
+  ]
+}

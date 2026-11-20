@@ -1,32 +1,42 @@
 import { useState, type FormEvent } from "react";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
 import { Button, Field, Icon, Modal, PageHead, useGo } from "@/components/ezstock/ui";
-import { adjustmentError, formatNow, type Movement } from "@/lib/ezstock/data";
+import { adjustmentError, errorMessage, formatMovementDate, formatNow, formatSigned } from "@/lib/ezstock/data";
+import { movementsQuery, productsQuery } from "@/lib/ezstock/queries";
 import { ezHead } from "@/lib/ezstock/seo";
-import { useEzStock } from "@/lib/ezstock/store";
+import { useNotify } from "@/lib/ezstock/store";
+import { useMe } from "@/lib/ezstock/use-me";
 
-export const Route = createFileRoute("/_painel/ajustes")({
+export const Route = createFileRoute("/_authenticated/_painel/ajustes")({
   head: () => ezHead("Ajuste de inventário", "Corrija divergências entre a contagem física e o saldo do sistema, com registro auditável."),
+  loader: ({ context }) =>
+    Promise.all([context.queryClient.ensureQueryData(productsQuery), context.queryClient.ensureQueryData(movementsQuery)]),
   component: InventoryAdjustment,
 });
 
 function InventoryAdjustment() {
-  const { products, setProducts, movements, setMovements, currentUser, notify } = useEzStock();
+  const { data: products } = useSuspenseQuery(productsQuery);
+  const { data: movements } = useSuspenseQuery(movementsQuery);
+  const me = useMe();
+  const notify = useNotify();
   const go = useGo();
+  const queryClient = useQueryClient();
   const activeProducts = products.filter((p) => p.active);
-  const [productId, setProductId] = useState(activeProducts[0]?.id ?? 0);
+  const [productId, setProductId] = useState(activeProducts[0]?.id ?? "");
   const [countedStock, setCountedStock] = useState(activeProducts[0]?.stock ?? 0);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
   const product = products.find((p) => p.id === productId);
   const difference = product ? countedStock - product.stock : 0;
-  const recentAdjustments = movements.filter((m) => m.type === "Ajuste").slice(0, 3);
+  const recentAdjustments = movements.filter((m) => m.type === "ajuste").slice(0, 3);
 
-  const selectProduct = (id: number) => {
-    const selected = products.find((p) => p.id === id);
+  const selectProduct = (id: string) => {
     setProductId(id);
-    setCountedStock(selected?.stock ?? 0);
+    setCountedStock(products.find((p) => p.id === id)?.stock ?? 0);
     setError("");
   };
 
@@ -38,22 +48,21 @@ function InventoryAdjustment() {
     setConfirming(true);
   };
 
-  const confirm = () => {
+  const confirm = async () => {
     if (!product) return;
-    const record: Movement = {
-      id: Date.now(),
-      product: product.name,
-      type: "Ajuste",
-      qty: difference,
-      date: formatNow(),
-      user: currentUser,
-      reason: reason.trim(),
-      previousStock: product.stock,
-      newStock: countedStock,
-    };
-    setProducts(products.map((p) => (p.id === product.id ? { ...p, stock: countedStock } : p)));
-    setMovements([record, ...movements]);
+    setBusy(true);
+    const { error: err } = await supabase.rpc("adjust_inventory", {
+      _product_id: product.id,
+      _counted: countedStock,
+      _reason: reason.trim(),
+    });
+    setBusy(false);
     setConfirming(false);
+    if (err) return setError(errorMessage(err));
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["products"] }),
+      queryClient.invalidateQueries({ queryKey: ["movements"] }),
+    ]);
     setReason("");
     notify(`Inventário ajustado. Novo saldo: ${countedStock} unidade(s).`);
   };
@@ -67,31 +76,35 @@ function InventoryAdjustment() {
             <div><h2>Novo ajuste</h2><p>Informe a quantidade encontrada na contagem física</p></div>
             <span className="audit-badge"><Icon name="check" size={14} />Operação auditável</span>
           </div>
-          <form onSubmit={submit} className="movement-form">
-            <Field label="Produto">
-              <select value={productId} onChange={(e) => selectProduct(Number(e.target.value))}>
-                {activeProducts.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}
-              </select>
-            </Field>
-            {product && (
-              <div className="stock-comparison">
-                <div><span>Saldo no sistema</span><strong>{product.stock} un.</strong></div>
-                <Icon name="arrow" />
-                <div><span>Contagem física</span><strong className={difference !== 0 ? "blue-text" : ""}>{countedStock} un.</strong></div>
-                <span className={`difference-pill ${difference > 0 ? "positive-diff" : difference < 0 ? "negative-diff" : ""}`}>{difference > 0 ? "+" : ""}{difference} un.</span>
-              </div>
-            )}
-            <Field label="Quantidade física encontrada" hint="Informe o total contado, não apenas a diferença.">
-              <input type="number" min="0" step="1" value={countedStock} onChange={(e) => { setCountedStock(Number(e.target.value)); setError(""); }} />
-            </Field>
-            <Field label="Motivo do ajuste">
-              <textarea value={reason} onChange={(e) => { setReason(e.target.value); setError(""); }} placeholder="Ex.: Divergência identificada no inventário mensal, avaria ou perda..." maxLength={240} required />
-              <small className="char-count">{reason.length}/240</small>
-            </Field>
-            <div className="audit-info"><Icon name="clock" /><div><strong>Registro automático</strong><span>{formatNow()} · {currentUser}</span></div></div>
-            {error && <div className="inline-error"><Icon name="alert" />{error}</div>}
-            <Button type="submit">Revisar e confirmar ajuste</Button>
-          </form>
+          {activeProducts.length === 0 ? (
+            <div className="mini-empty">Cadastre um produto ativo para ajustar o inventário.</div>
+          ) : (
+            <form onSubmit={submit} className="movement-form">
+              <Field label="Produto">
+                <select value={productId} onChange={(e) => selectProduct(e.target.value)}>
+                  {activeProducts.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}
+                </select>
+              </Field>
+              {product && (
+                <div className="stock-comparison">
+                  <div><span>Saldo no sistema</span><strong>{product.stock} un.</strong></div>
+                  <Icon name="arrow" />
+                  <div><span>Contagem física</span><strong className={difference !== 0 ? "blue-text" : ""}>{countedStock} un.</strong></div>
+                  <span className={`difference-pill ${difference > 0 ? "positive-diff" : difference < 0 ? "negative-diff" : ""}`}>{difference > 0 ? "+" : ""}{difference} un.</span>
+                </div>
+              )}
+              <Field label="Quantidade física encontrada" hint="Informe o total contado, não apenas a diferença.">
+                <input type="number" min="0" step="1" value={countedStock} onChange={(e) => { setCountedStock(Number(e.target.value)); setError(""); }} />
+              </Field>
+              <Field label="Motivo do ajuste">
+                <textarea value={reason} onChange={(e) => { setReason(e.target.value); setError(""); }} placeholder="Ex.: Divergência identificada no inventário mensal, avaria ou perda..." maxLength={240} required />
+                <small className="char-count">{reason.length}/240</small>
+              </Field>
+              <div className="audit-info"><Icon name="clock" /><div><strong>Registro automático</strong><span>{formatNow()} · {me.fullName}</span></div></div>
+              {error && <div className="inline-error"><Icon name="alert" />{error}</div>}
+              <Button type="submit">Revisar e confirmar ajuste</Button>
+            </form>
+          )}
         </section>
         <aside className="side-stack">
           <section className="card rule-card">
@@ -104,12 +117,12 @@ function InventoryAdjustment() {
             {recentAdjustments.length ? (
               recentAdjustments.map((m) => (
                 <div className="mini-movement" key={m.id}>
-                  <span className={m.qty >= 0 ? "positive" : "negative"}>{m.qty > 0 ? "+" : ""}{m.qty}</span>
-                  <div><strong>{m.product}</strong><small>{m.date} · {m.user}</small></div>
+                  <span className={m.quantity >= 0 ? "positive" : "negative"}>{formatSigned(m.quantity)}</span>
+                  <div><strong>{m.product}</strong><small>{formatMovementDate(m.created_at)} · {m.user}</small></div>
                 </div>
               ))
             ) : (
-              <div className="mini-empty">Nenhum ajuste registrado nesta sessão.</div>
+              <div className="mini-empty">Nenhum ajuste registrado ainda.</div>
             )}
           </section>
         </aside>
@@ -125,7 +138,7 @@ function InventoryAdjustment() {
             </div>
             <dl>
               <div><dt>Diferença</dt><dd className={difference > 0 ? "positive" : "negative"}>{difference > 0 ? "+" : ""}{difference} unidades</dd></div>
-              <div><dt>Responsável</dt><dd>{currentUser}</dd></div>
+              <div><dt>Responsável</dt><dd>{me.fullName}</dd></div>
               <div><dt>Data e hora</dt><dd>{formatNow()}</dd></div>
               <div><dt>Motivo</dt><dd>{reason}</dd></div>
             </dl>
@@ -133,7 +146,7 @@ function InventoryAdjustment() {
             <footer>
               <span />
               <Button variant="secondary" onClick={() => setConfirming(false)}>Voltar</Button>
-              <Button onClick={confirm}>Confirmar ajuste</Button>
+              <Button onClick={confirm} disabled={busy}>{busy ? "Salvando..." : "Confirmar ajuste"}</Button>
             </footer>
           </div>
         </Modal>
