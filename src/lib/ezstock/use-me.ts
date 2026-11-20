@@ -5,7 +5,7 @@ import { meQuery, type Me } from "./queries";
 /** Signed-in member inside the panel (the panel layout guarantees a user with a role). */
 export function useMe(): Me & { role: AppRole; isAdmin: boolean } {
   const { data } = useSuspenseQuery(meQuery);
-  const me = data ?? { id: "", email: "", fullName: "", role: null };
+  const me = data ?? { id: "", email: "", fullName: "", role: null, active: false, isPrimary: false };
   const role: AppRole = me.role ?? "colaborador";
-  return { ...me, role, isAdmin: role === "admin" };
+  return { ...me, role, isAdmin: role === "admin" || role === "super_admin" };
 }

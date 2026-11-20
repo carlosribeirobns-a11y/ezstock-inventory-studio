@@ -44,8 +44,8 @@ function PainelLayout() {
         <section className="login-form-wrap">
           <div className="login-form">
             <div className="mobile-logo show"><div className="logo-mark"><Icon name="box" /></div><strong>EzStock</strong></div>
-            <span className="eyebrow blue">ACESSO PENDENTE</span>
-            <h2>Sua conta ainda não tem acesso</h2>
+            <span className="eyebrow blue">{me && !me.active ? "CONTA INATIVA" : "ACESSO PENDENTE"}</span>
+            <h2>{me && !me.active ? "Sua conta está inativa" : "Sua conta ainda não tem acesso"}</h2>
             <p>Peça ao administrador da loja para definir seu perfil de acesso na tela Usuários.</p>
             <button className="btn secondary" onClick={signOut}><Icon name="logout" size={18} />Sair da conta</button>
           </div>
@@ -54,7 +54,7 @@ function PainelLayout() {
     );
   }
 
-  const isAdmin = me.role === "admin";
+  const isAdmin = me.role === "admin" || me.role === "super_admin";
   const visibleNav = isAdmin ? nav : nav.filter((item) => collaboratorPages.includes(item.id));
   const current = nav.find((n) => pagePath[n.id] === pathname);
 

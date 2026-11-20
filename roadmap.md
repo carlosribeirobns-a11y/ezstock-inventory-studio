@@ -7,3 +7,5 @@
 - [x] Atomic stock movements and inventory adjustments (never negative, permanent history)
 - [x] Real dashboard, history filters/export and reports from saved data
 - [x] Verify end-to-end signed in as admin and collaborator
+- [x] Add account deactivation/deletion and protected Superadministrator permissions
+- [x] Verify account management and access revocation end-to-end

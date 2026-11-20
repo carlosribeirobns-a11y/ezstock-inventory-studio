@@ -25,6 +25,8 @@ const paths: Record<string, ReactNode> = {
   eye: <><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
   close: <><path d="m6 6 12 12M18 6 6 18" /></>,
   check: <><path d="m5 12 4 4L19 6" /></>,
+  trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></>,
+  pause: <><circle cx="12" cy="12" r="9" /><path d="M9 8v8M15 8v8" /></>,
 };
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
@@ -42,16 +44,18 @@ export function Button({
   onClick,
   type = "button",
   disabled = false,
+  ariaLabel,
 }: {
-  children: ReactNode;
-  variant?: "primary" | "secondary" | "danger-ghost";
+  children?: ReactNode;
+  variant?: "primary" | "secondary" | "danger-ghost" | "icon";
   icon?: string | undefined;
   onClick?: (() => void) | undefined;
   type?: "button" | "submit";
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   return (
-    <button className={`btn ${variant}`} onClick={onClick} type={type} disabled={disabled}>
+    <button className={variant === "icon" ? "icon-button" : `btn ${variant}`} onClick={onClick} type={type} disabled={disabled} aria-label={ariaLabel} title={ariaLabel}>
       {icon && <Icon name={icon} size={18} />}
       {children}
     </button>

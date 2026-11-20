@@ -141,19 +141,25 @@ export type Database = {
       }
       profiles: {
         Row: {
+          active: boolean
           created_at: string
+          deleted_at: string | null
           email: string
           full_name: string
           id: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
+          deleted_at?: string | null
           email?: string
           full_name?: string
           id: string
         }
         Update: {
+          active?: boolean
           created_at?: string
+          deleted_at?: string | null
           email?: string
           full_name?: string
           id?: string
@@ -188,18 +194,21 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_primary_superadmin: boolean
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          is_primary_superadmin?: boolean
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          is_primary_superadmin?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
@@ -240,6 +249,15 @@ export type Database = {
         Returns: boolean
       }
       is_member: { Args: { _user_id: string }; Returns: boolean }
+      manage_team_account: {
+        Args: {
+          _action: string
+          _full_name?: string
+          _role?: string
+          _user_id: string
+        }
+        Returns: undefined
+      }
       needs_setup: { Args: never; Returns: boolean }
       register_movement: {
         Args: {
@@ -271,7 +289,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "colaborador"
+      app_role: "admin" | "colaborador" | "super_admin"
       movement_type: "entrada" | "saida" | "ajuste"
     }
     CompositeTypes: {
@@ -400,7 +418,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "colaborador"],
+      app_role: ["admin", "colaborador", "super_admin"],
       movement_type: ["entrada", "saida", "ajuste"],
     },
   },

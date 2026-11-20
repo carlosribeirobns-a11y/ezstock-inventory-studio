@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { canAssignRole } from "./team-rules";
 
-const roleSchema = z.enum(["admin", "colaborador"]);
+const roleSchema = z.enum(["admin", "colaborador", "super_admin"]);
 const newUserSchema = z.object({
   fullName: z.string().trim().min(2, "Informe o nome completo.").max(120),
   email: z.string().trim().toLowerCase().email("Informe um e-mail válido.").max(255),
@@ -24,7 +25,7 @@ export const setupFirstAdmin = createServerFn({ method: "POST" })
     const { count, error: countError } = await supabaseAdmin
       .from("user_roles")
       .select("id", { count: "exact", head: true })
-      .eq("role", "admin");
+      .in("role", ["admin", "super_admin"]);
     if (countError) throw new Error("Não foi possível verificar a configuração inicial.");
     if ((count ?? 0) > 0) throw new Error("O administrador já foi criado. Entre com sua conta.");
 
@@ -51,6 +52,10 @@ export const createTeamMember = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: isAdmin } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
     if (!isAdmin) throw new Error("Somente administradores podem gerenciar usuários.");
+    const { data: authority, error: authorityError } = await context.supabase.from("user_roles").select("role, is_primary_superadmin").eq("user_id", context.userId);
+    if (authorityError) throw new Error("Não foi possível verificar suas permissões.");
+    const actor = { id: context.userId, role: "admin" as const, isPrimary: (authority ?? []).some((r) => r.is_primary_superadmin) };
+    if (!canAssignRole(actor, data.role)) throw new Error("Somente o Superadministrador titular pode criar Superadministradores.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
@@ -74,20 +79,26 @@ export const setMemberRole = createServerFn({ method: "POST" })
     z.object({ userId: z.string().uuid(), role: roleSchema, fullName: z.string().trim().min(2).max(120) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { data: isAdmin } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
-    if (!isAdmin) throw new Error("Somente administradores podem gerenciar usuários.");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    if (data.role !== "admin") {
-      const { data: admins, error } = await supabaseAdmin.from("user_roles").select("user_id").eq("role", "admin");
-      if (error) throw new Error("Não foi possível verificar os administradores.");
-      const others = (admins ?? []).filter((a) => a.user_id !== data.userId);
-      if (others.length === 0) throw new Error("A loja precisa de pelo menos um administrador.");
+    const { error } = await context.supabase.rpc("manage_team_account", { _user_id: data.userId, _action: "edit", _role: data.role, _full_name: data.fullName });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const changeAccountStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ userId: z.string().uuid(), action: z.enum(["deactivate", "reactivate", "delete"]) }).parse(input))
+  .handler(async ({ data, context }) => {
+    // This atomic function authorizes the actor and tombstones deleted accounts
+    // before touching Auth, preventing a concurrent promotion from bypassing rules.
+    const { error } = await context.supabase.rpc("manage_team_account", { _user_id: data.userId, _action: data.action });
+    if (error) throw new Error(error.message);
+    if (data.action === "delete") {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(data.userId, true);
+      if (deleteError) {
+        await supabaseAdmin.from("profiles").update({ deleted_at: null }).eq("id", data.userId);
+        throw new Error("A conta foi inativada, mas a exclusão não foi concluída. Tente excluir novamente.");
+      }
     }
-    const { error: delError } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
-    if (delError) throw new Error("Não foi possível atualizar o perfil de acesso.");
-    const { error: insError } = await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: data.role });
-    if (insError) throw new Error("Não foi possível atualizar o perfil de acesso.");
-    const { error: nameError } = await supabaseAdmin.from("profiles").update({ full_name: data.fullName }).eq("id", data.userId);
-    if (nameError) throw new Error("Não foi possível atualizar o nome.");
     return { ok: true };
   });

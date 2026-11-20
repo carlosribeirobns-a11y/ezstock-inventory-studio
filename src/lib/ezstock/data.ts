@@ -9,10 +9,11 @@ export type Page =
   | "relatorios"
   | "usuarios";
 
-export type AppRole = "admin" | "colaborador";
+export type AppRole = "admin" | "colaborador" | "super_admin";
 export type MovementType = "entrada" | "saida" | "ajuste";
 
 export const roleLabel: Record<AppRole, string> = {
+  super_admin: "Superadministrador",
   admin: "Administrador",
   colaborador: "Colaborador",
 };

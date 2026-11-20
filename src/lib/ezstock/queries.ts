@@ -2,26 +2,30 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole, MovementType } from "./data";
 
-export type Me = { id: string; email: string; fullName: string; role: AppRole | null };
+export type Me = { id: string; email: string; fullName: string; role: AppRole | null; active: boolean; isPrimary: boolean };
 
 export const meQuery = queryOptions({
   queryKey: ["me"],
+  refetchInterval: 30000,
   queryFn: async (): Promise<Me | null> => {
     const { data: auth } = await supabase.auth.getUser();
     const user = auth.user;
     if (!user) return null;
     const [{ data: profile }, { data: roles, error }] = await Promise.all([
-      supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", user.id),
+      supabase.from("profiles").select("full_name, email, active, deleted_at").eq("id", user.id).maybeSingle(),
+      supabase.from("user_roles").select("role, is_primary_superadmin").eq("user_id", user.id),
     ]);
     if (error) throw error;
     const list = (roles ?? []).map((r) => r.role);
-    const role: AppRole | null = list.includes("admin") ? "admin" : list.includes("colaborador") ? "colaborador" : null;
+    const active = Boolean(profile?.active && !profile.deleted_at);
+    const role: AppRole | null = !active ? null : list.includes("super_admin") ? "super_admin" : list.includes("admin") ? "admin" : list.includes("colaborador") ? "colaborador" : null;
     return {
       id: user.id,
       email: profile?.email || user.email || "",
       fullName: profile?.full_name || user.email || "",
       role,
+      active,
+      isPrimary: (roles ?? []).some((r) => r.is_primary_superadmin),
     };
   },
 });
@@ -136,15 +140,15 @@ export const suppliersQuery = queryOptions({
   },
 });
 
-export type TeamMember = { id: string; fullName: string; email: string; role: AppRole | null };
+export type TeamMember = { id: string; fullName: string; email: string; role: AppRole | null; active: boolean; isPrimary: boolean };
 
 /** Admin-only list (non-admins only see their own role row). */
 export const teamQuery = queryOptions({
   queryKey: ["team"],
   queryFn: async (): Promise<TeamMember[]> => {
     const [{ data: profiles, error }, { data: roles, error: rolesError }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, email").order("full_name"),
-      supabase.from("user_roles").select("user_id, role"),
+      supabase.from("profiles").select("id, full_name, email, active").is("deleted_at", null).order("full_name"),
+      supabase.from("user_roles").select("user_id, role, is_primary_superadmin"),
     ]);
     if (error) throw error;
     if (rolesError) throw rolesError;
@@ -154,7 +158,9 @@ export const teamQuery = queryOptions({
         id: p.id,
         fullName: p.full_name || p.email,
         email: p.email,
-        role: mine.includes("admin") ? "admin" : mine.includes("colaborador") ? "colaborador" : null,
+        role: mine.includes("super_admin") ? "super_admin" : mine.includes("admin") ? "admin" : mine.includes("colaborador") ? "colaborador" : null,
+        active: p.active,
+        isPrimary: (roles ?? []).some((r) => r.user_id === p.id && r.is_primary_superadmin),
       };
     });
   },

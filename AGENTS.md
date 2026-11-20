@@ -33,7 +33,8 @@ use the editor.
 
 - EzStock data lives in Lovable Cloud tables (profiles, user_roles, categories, suppliers, products, movements); browser code reads them through React Query `queryOptions` in `src/lib/ezstock/queries.ts`, with route loaders calling `ensureQueryData` and components `useSuspenseQuery`.
 - Stock only changes through the `register_movement` / `adjust_inventory` database functions (products.stock has no client UPDATE grant and movements has no client write grant), so the balance can never go negative and history stays append-only.
-- Roles live in `user_roles` (`admin` | `colaborador`); RLS uses `has_role` / `is_member`. Accounts are created server-side in `src/lib/ezstock/team.functions.ts` (first admin while `needs_setup()` is true, then admin-only); public sign-up is disabled.
+- Roles and the protected primary-superadministrator flag live in `user_roles`; RLS helpers require an active, nondeleted profile and treat superadministrators as admins. Account creation/deletion uses authenticated server functions; atomic role/status changes use `manage_team_account` so permissions cannot be bypassed or raced. Public sign-up is disabled.
+- Account deletion revokes access before soft-deleting the auth identity and retains the profile for immutable movement attribution; never delete stock history to remove an account.
 - Signed-in screens live under `_authenticated` (client-only gate, redirects to `/auth`) and the nested pathless `_painel` layout (sidebar/top bar); keep one route file per screen.
 - Pure stock and report rules live in `src/lib/ezstock/data.ts` and `reports.ts` so they can be unit-tested; screens call them instead of inlining checks.
 - Visual styling is plain CSS classes in `src/styles.css` ported from the prototype, using the oklch tokens defined in `:root`; reuse those classes rather than adding ad hoc colors.
