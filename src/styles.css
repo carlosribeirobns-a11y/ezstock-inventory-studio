@@ -339,3 +339,7 @@ td strong { color: oklch(0.316 0.041 261.3); font-size: 11px; }
 @media (max-width: 600px) { .notif-panel { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; } }
 .modal-form .inline-error, .modal-form .info-strip + .inline-error { margin-top: 17px; }
 .user-dropdown-backdrop { position: fixed; inset: 0; z-index: 35; }
+.adjustment-requests { margin-top: 24px; }
+.adjustment-requests .card-head { padding: 20px 24px 0; }
+.request-note { display: block; color: var(--muted, oklch(0.55 0.02 260)); font-size: 12px; margin-top: 2px; }
+.row-actions { gap: 4px; }

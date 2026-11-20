@@ -37,6 +37,8 @@ export type Product = {
   sku: string;
   category_id: string | null;
   category: string;
+  supplier_id: string | null;
+  supplier: string;
   stock: number;
   min_stock: number;
   price: number;
@@ -49,7 +51,8 @@ export const productsQuery = queryOptions({
   queryFn: async (): Promise<Product[]> => {
     const { data, error } = await supabase
       .from("products")
-      .select("id, name, sku, category_id, stock, min_stock, price, active, created_at, categories(name)")
+      .select("id, name, sku, category_id, supplier_id, stock, min_stock, price, active, created_at, categories(name), suppliers(name)")
+      .is("deleted_at", null)
       .order("name");
     if (error) throw error;
     return (data ?? []).map((p) => ({
@@ -58,6 +61,8 @@ export const productsQuery = queryOptions({
       sku: p.sku,
       category_id: p.category_id,
       category: p.categories?.name ?? "Sem categoria",
+      supplier_id: p.supplier_id,
+      supplier: p.suppliers?.name ?? "—",
       stock: p.stock,
       min_stock: p.min_stock,
       price: Number(p.price),
@@ -164,5 +169,54 @@ export const teamQuery = queryOptions({
         isPrimary: (roles ?? []).some((r) => r.user_id === p.id && r.is_primary_superadmin),
       };
     });
+  },
+});
+
+export type AdjustmentRequest = {
+  id: string;
+  product_id: string;
+  product: string;
+  sku: string;
+  counted: number;
+  system_stock: number;
+  reason: string;
+  status: "pendente" | "aprovado" | "recusado";
+  requested_by: string | null;
+  requester: string;
+  reviewer: string;
+  review_note: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+};
+
+/** Admins see every request; collaborators only their own (RLS). */
+export const adjustmentRequestsQuery = queryOptions({
+  queryKey: ["adjustment-requests"],
+  refetchInterval: 30000,
+  queryFn: async (): Promise<AdjustmentRequest[]> => {
+    const { data, error } = await supabase
+      .from("adjustment_requests")
+      .select(
+        "id, product_id, counted, system_stock, reason, status, requested_by, review_note, reviewed_at, created_at, products(name, sku), requester:profiles!adjustment_requests_requested_by_fkey(full_name), reviewer:profiles!adjustment_requests_reviewed_by_fkey(full_name)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      product_id: r.product_id,
+      product: r.products?.name ?? "—",
+      sku: r.products?.sku ?? "",
+      counted: r.counted,
+      system_stock: r.system_stock,
+      reason: r.reason,
+      status: r.status,
+      requested_by: r.requested_by,
+      requester: r.requester?.full_name || "—",
+      reviewer: r.reviewer?.full_name || "",
+      review_note: r.review_note,
+      reviewed_at: r.reviewed_at,
+      created_at: r.created_at,
+    }));
   },
 });

@@ -170,3 +170,13 @@ export function errorMessage(error: unknown, fallback = "Não foi possível conc
   }
   return fallback;
 }
+
+/** A product can be deleted only after it is inactive and its balance is zero. */
+export function canDeleteProduct(p: { active: boolean; stock: number }): boolean {
+  return !p.active && p.stock === 0;
+}
+
+/** Admins adjust stock directly; collaborators send a request for approval. */
+export function adjustmentNeedsApproval(role: AppRole | null): boolean {
+  return role !== "admin" && role !== "super_admin";
+}

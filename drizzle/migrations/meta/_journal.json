@@ -29,6 +29,13 @@
       "when": 1795215766943,
       "tag": "0003_account_governance",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795218415089,
+      "tag": "0004_products_suppliers_and_adjustment_approvals",
+      "breakpoints": true
     }
   ]
 }

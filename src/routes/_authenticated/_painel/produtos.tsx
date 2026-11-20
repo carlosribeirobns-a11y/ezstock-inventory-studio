@@ -3,8 +3,8 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button, Empty, Field, Icon, Modal, PageHead, Status } from "@/components/ezstock/ui";
-import { errorMessage, formatPrice } from "@/lib/ezstock/data";
-import { categoriesQuery, productsQuery, type Product } from "@/lib/ezstock/queries";
+import { canDeleteProduct, errorMessage, formatPrice } from "@/lib/ezstock/data";
+import { categoriesQuery, productsQuery, suppliersQuery, type Product } from "@/lib/ezstock/queries";
 import { ezHead } from "@/lib/ezstock/seo";
 import { useNotify } from "@/lib/ezstock/store";
 import { useMe } from "@/lib/ezstock/use-me";
@@ -12,7 +12,11 @@ import { useMe } from "@/lib/ezstock/use-me";
 export const Route = createFileRoute("/_authenticated/_painel/produtos")({
   head: () => ezHead("Produtos", "Cadastre produtos, consulte saldos e acompanhe itens com estoque baixo ou zerado."),
   loader: ({ context }) =>
-    Promise.all([context.queryClient.ensureQueryData(productsQuery), context.queryClient.ensureQueryData(categoriesQuery)]),
+    Promise.all([
+      context.queryClient.ensureQueryData(productsQuery),
+      context.queryClient.ensureQueryData(categoriesQuery),
+      context.queryClient.ensureQueryData(suppliersQuery),
+    ]),
   component: Products,
 });
 
@@ -21,12 +25,15 @@ const PAGE_SIZE = 10;
 function Products() {
   const { data: products } = useSuspenseQuery(productsQuery);
   const { data: categories } = useSuspenseQuery(categoriesQuery);
+  const { data: suppliers } = useSuspenseQuery(suppliersQuery);
   const { isAdmin } = useMe();
   const notify = useNotify();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Todos");
   const [category, setCategory] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [deleting, setDeleting] = useState<Product | null>(null);
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Product | null | undefined>(undefined);
   const [error, setError] = useState("");
@@ -37,6 +44,7 @@ function Products() {
     (p) =>
       (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)) &&
       (!category || p.category_id === category) &&
+      (!supplier || p.supplier_id === supplier) &&
       (filter === "Todos" ||
         (filter === "Baixo" && p.active && p.stock > 0 && p.stock <= p.min_stock) ||
         (filter === "Sem estoque" && p.active && p.stock === 0) ||
@@ -56,6 +64,7 @@ function Products() {
       queryClient.invalidateQueries({ queryKey: ["products"] }),
       queryClient.invalidateQueries({ queryKey: ["categories"] }),
       queryClient.invalidateQueries({ queryKey: ["movements"] }),
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] }),
     ]);
 
   const save = async (e: FormEvent<HTMLFormElement>) => {
@@ -65,6 +74,7 @@ function Products() {
       name: String(data.get("name")).trim(),
       sku: String(data.get("sku")).trim().toUpperCase(),
       category_id: String(data.get("category")) || null,
+      supplier_id: String(data.get("supplier")) || null,
       min_stock: Number(data.get("min")),
       price: Number(data.get("price")),
     };
@@ -89,6 +99,16 @@ function Products() {
     close();
   };
 
+  const remove = async (product: Product) => {
+    setBusy(true);
+    const { data: result, error: err } = await supabase.rpc("delete_product", { _product_id: product.id });
+    setBusy(false);
+    setDeleting(null);
+    if (err) return notify(errorMessage(err), "error");
+    await refresh();
+    notify(result === "arquivado" ? "Produto excluído. O histórico de movimentações foi preservado." : "Produto excluído.");
+  };
+
   return (
     <>
       <PageHead title="Produtos" subtitle="Gerencie os produtos e acompanhe os níveis de estoque." action={isAdmin ? <Button icon="plus" onClick={() => setEditing(null)}>Novo produto</Button> : undefined} />
@@ -102,23 +122,33 @@ function Products() {
             <option value="">Todas as categorias</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+          <select value={supplier} onChange={(e) => { setSupplier(e.target.value); setPage(1); }} aria-label="Filtrar por fornecedor">
+            <option value="">Todos os fornecedores</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
           <span className="result-count">{visible.length} produtos</span>
         </div>
         {pageRows.length ? (
           <div className="table-scroll">
             <table>
-              <thead><tr><th>Produto</th><th>Categoria</th><th>Estoque</th><th>Preço</th><th>Status</th><th /></tr></thead>
+              <thead><tr><th>Produto</th><th>Categoria</th><th>Fornecedor</th><th>Estoque</th><th>Preço</th><th>Status</th><th /></tr></thead>
               <tbody>
                 {pageRows.map((p) => (
                   <tr key={p.id}>
                     <td><div className="product-cell"><div className="product-thumb">{p.name[0]}</div><div><strong>{p.name}</strong><span>{p.sku}</span></div></div></td>
                     <td>{p.category}</td>
+                    <td>{p.supplier}</td>
                     <td><strong>{p.stock}</strong> un. <span className="min-stock">mín. {p.min_stock}</span></td>
                     <td>{formatPrice(p.price)}</td>
                     <td><Status stock={p.stock} min={p.min_stock} active={p.active} /></td>
                     <td>
                       {isAdmin ? (
-                        <button className="icon-button" onClick={() => setEditing(p)} title="Editar" aria-label={`Editar ${p.name}`}><Icon name="edit" size={18} /></button>
+                        <div className="row-actions">
+                          <button className="icon-button" onClick={() => setEditing(p)} title="Editar" aria-label={`Editar ${p.name}`}><Icon name="edit" size={18} /></button>
+                          {canDeleteProduct(p) && (
+                            <button className="icon-button" onClick={() => setDeleting(p)} title="Excluir produto" aria-label={`Excluir ${p.name}`}><Icon name="trash" size={18} /></button>
+                          )}
+                        </div>
                       ) : (
                         <span className="icon-button" title="Somente administradores editam produtos"><Icon name="eye" size={18} /></span>
                       )}
@@ -154,13 +184,19 @@ function Products() {
                   {usableCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </Field>
+              <Field label="Fornecedor">
+                <select name="supplier" defaultValue={editing?.supplier_id ?? ""}>
+                  <option value="">Sem fornecedor</option>
+                  {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </Field>
               <Field label="Preço de venda"><input name="price" defaultValue={editing?.price} required type="number" min="0" step="0.01" placeholder="0,00" /></Field>
               <Field label="Estoque atual" hint={editing ? "Alterações de saldo devem ser feitas em Movimentações." : "Será registrado no histórico como estoque inicial."}>
                 <input name="stock" defaultValue={editing?.stock ?? 0} readOnly={!!editing} type="number" min="0" step="1" />
               </Field>
               <Field label="Estoque mínimo"><input name="min" defaultValue={editing?.min_stock ?? 5} required type="number" min="0" step="1" /></Field>
             </div>
-            {editing && <div className="info-strip"><Icon name="alert" />Produtos com histórico não são excluídos. Para removê-lo das operações, use “Inativar produto”.</div>}
+            {editing && <div className="info-strip"><Icon name="alert" />Para excluir um produto, inative-o e deixe o saldo em zero. O histórico de movimentações é sempre preservado.</div>}
             {error && <div className="inline-error"><Icon name="alert" />{error}</div>}
             <footer>
               {editing && (
@@ -173,6 +209,18 @@ function Products() {
               <Button type="submit" disabled={busy}>{busy ? "Salvando..." : "Salvar produto"}</Button>
             </footer>
           </form>
+        </Modal>
+      )}
+      {deleting && (
+        <Modal title="Excluir produto" subtitle="Esta ação não pode ser desfeita." onClose={() => setDeleting(null)}>
+          <div className="modal-form">
+            <p>Deseja excluir <strong>{deleting.name}</strong> ({deleting.sku})? Ele deixará de aparecer nas listas, mas as movimentações já registradas continuam no histórico.</p>
+            <footer>
+              <span />
+              <Button variant="secondary" onClick={() => setDeleting(null)}>Cancelar</Button>
+              <Button variant="danger-ghost" disabled={busy} onClick={() => remove(deleting)}>{busy ? "Excluindo..." : "Excluir produto"}</Button>
+            </footer>
+          </div>
         </Modal>
       )}
     </>

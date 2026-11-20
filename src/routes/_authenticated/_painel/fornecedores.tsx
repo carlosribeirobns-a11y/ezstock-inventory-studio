@@ -4,19 +4,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button, Empty, Field, Icon, Modal, PageHead } from "@/components/ezstock/ui";
 import { errorMessage } from "@/lib/ezstock/data";
-import { suppliersQuery, type Supplier } from "@/lib/ezstock/queries";
+import { suppliersQuery, productsQuery, type Supplier } from "@/lib/ezstock/queries";
 import { ezHead } from "@/lib/ezstock/seo";
 import { useNotify } from "@/lib/ezstock/store";
 import { useMe } from "@/lib/ezstock/use-me";
+import { LinkedProductsModal } from "@/components/ezstock/linked-products";
 
 export const Route = createFileRoute("/_authenticated/_painel/fornecedores")({
   head: () => ezHead("Fornecedores", "Contatos dos fornecedores e parceiros comerciais da sua loja."),
-  loader: ({ context }) => context.queryClient.ensureQueryData(suppliersQuery),
+  loader: ({ context }) =>
+    Promise.all([context.queryClient.ensureQueryData(suppliersQuery), context.queryClient.ensureQueryData(productsQuery)]),
   component: Suppliers,
 });
 
 function Suppliers() {
   const { data: suppliers } = useSuspenseQuery(suppliersQuery);
+  const { data: products } = useSuspenseQuery(productsQuery);
+  const [viewing, setViewing] = useState<Supplier | null>(null);
+  const linked = (id: string) => products.filter((p) => p.supplier_id === id);
   const { isAdmin } = useMe();
   const notify = useNotify();
   const queryClient = useQueryClient();
@@ -27,7 +32,8 @@ function Suppliers() {
   const rows = suppliers.filter((s) => [s.name, s.phone, s.email].join(" ").toLowerCase().includes(query.toLowerCase()));
 
   const close = () => { setEditing(undefined); setError(""); };
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+  const refresh = () =>
+    Promise.all([queryClient.invalidateQueries({ queryKey: ["suppliers"] }), queryClient.invalidateQueries({ queryKey: ["products"] })]);
   const save = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
@@ -68,14 +74,15 @@ function Suppliers() {
         {rows.length ? (
           <div className="table-scroll">
             <table>
-              <thead><tr><th>Fornecedor</th><th>Telefone</th><th>E-mail</th><th /></tr></thead>
+              <thead><tr><th>Fornecedor</th><th>Telefone</th><th>E-mail</th><th>Produtos vinculados</th><th /></tr></thead>
               <tbody>
                 {rows.map((s) => (
                   <tr key={s.id}>
                     <td><strong>{s.name}</strong></td>
                     <td>{s.phone || "—"}</td>
                     <td>{s.email || "—"}</td>
-                    <td>{isAdmin && <button className="icon-button" onClick={() => setEditing(s)} aria-label={`Editar ${s.name}`}><Icon name="edit" size={18} /></button>}</td>
+                    <td>{linked(s.id).length} {linked(s.id).length === 1 ? "produto" : "produtos"}</td>
+                    <td><div className="row-actions"><button className="icon-button" onClick={() => setViewing(s)} title="Ver produtos" aria-label={`Ver produtos de ${s.name}`}><Icon name="eye" size={18} /></button>{isAdmin && <button className="icon-button" onClick={() => setEditing(s)} aria-label={`Editar ${s.name}`}><Icon name="edit" size={18} /></button>}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -103,6 +110,7 @@ function Suppliers() {
           </form>
         </Modal>
       )}
+      {viewing && <LinkedProductsModal title={`Produtos de ${viewing.name}`} products={linked(viewing.id)} onClose={() => setViewing(null)} />}
     </>
   );
 }

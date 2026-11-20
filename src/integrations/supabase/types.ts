@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      adjustment_requests: {
+        Row: {
+          counted: number
+          created_at: string
+          id: string
+          movement_id: string | null
+          product_id: string
+          reason: string
+          requested_by: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["adjustment_status"]
+          system_stock: number
+        }
+        Insert: {
+          counted: number
+          created_at?: string
+          id?: string
+          movement_id?: string | null
+          product_id: string
+          reason: string
+          requested_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["adjustment_status"]
+          system_stock: number
+        }
+        Update: {
+          counted?: number
+          created_at?: string
+          id?: string
+          movement_id?: string | null
+          product_id?: string
+          reason?: string
+          requested_by?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["adjustment_status"]
+          system_stock?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adjustment_requests_movement_id_fkey"
+            columns: ["movement_id"]
+            isOneToOne: false
+            referencedRelation: "movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustment_requests_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustment_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustment_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           active: boolean
@@ -97,36 +171,42 @@ export type Database = {
           active: boolean
           category_id: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           min_stock: number
           name: string
           price: number
           sku: string
           stock: number
+          supplier_id: string | null
           updated_at: string
         }
         Insert: {
           active?: boolean
           category_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           min_stock?: number
           name: string
           price?: number
           sku: string
           stock?: number
+          supplier_id?: string | null
           updated_at?: string
         }
         Update: {
           active?: boolean
           category_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           min_stock?: number
           name?: string
           price?: number
           sku?: string
           stock?: number
+          supplier_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -135,6 +215,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
         ]
@@ -219,6 +306,33 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _apply_adjustment: {
+        Args: {
+          _counted: number
+          _product_id: string
+          _reason: string
+          _user: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          movement_date: string
+          new_stock: number
+          note: string | null
+          previous_stock: number
+          product_id: string
+          quantity: number
+          reason: string | null
+          type: Database["public"]["Enums"]["movement_type"]
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "movements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       adjust_inventory: {
         Args: { _counted: number; _product_id: string; _reason: string }
         Returns: {
@@ -241,6 +355,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_product: { Args: { _product_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -287,8 +402,55 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      request_adjustment: {
+        Args: { _counted: number; _product_id: string; _reason: string }
+        Returns: {
+          counted: number
+          created_at: string
+          id: string
+          movement_id: string | null
+          product_id: string
+          reason: string
+          requested_by: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["adjustment_status"]
+          system_stock: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "adjustment_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      review_adjustment: {
+        Args: { _approve: boolean; _note: string; _request_id: string }
+        Returns: {
+          counted: number
+          created_at: string
+          id: string
+          movement_id: string | null
+          product_id: string
+          reason: string
+          requested_by: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["adjustment_status"]
+          system_stock: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "adjustment_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
+      adjustment_status: "pendente" | "aprovado" | "recusado"
       app_role: "admin" | "colaborador" | "super_admin"
       movement_type: "entrada" | "saida" | "ajuste"
     }
@@ -418,6 +580,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      adjustment_status: ["pendente", "aprovado", "recusado"],
       app_role: ["admin", "colaborador", "super_admin"],
       movement_type: ["entrada", "saida", "ajuste"],
     },

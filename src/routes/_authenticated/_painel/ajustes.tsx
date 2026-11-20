@@ -3,8 +3,8 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button, Field, Icon, Modal, PageHead, useGo } from "@/components/ezstock/ui";
-import { adjustmentError, errorMessage, formatMovementDate, formatNow, formatSigned } from "@/lib/ezstock/data";
-import { movementsQuery, productsQuery } from "@/lib/ezstock/queries";
+import { adjustmentError, adjustmentNeedsApproval, errorMessage, formatMovementDate, formatNow, formatSigned } from "@/lib/ezstock/data";
+import { adjustmentRequestsQuery, movementsQuery, productsQuery, type AdjustmentRequest } from "@/lib/ezstock/queries";
 import { ezHead } from "@/lib/ezstock/seo";
 import { useNotify } from "@/lib/ezstock/store";
 import { useMe } from "@/lib/ezstock/use-me";
@@ -12,14 +12,23 @@ import { useMe } from "@/lib/ezstock/use-me";
 export const Route = createFileRoute("/_authenticated/_painel/ajustes")({
   head: () => ezHead("Ajuste de inventário", "Corrija divergências entre a contagem física e o saldo do sistema, com registro auditável."),
   loader: ({ context }) =>
-    Promise.all([context.queryClient.ensureQueryData(productsQuery), context.queryClient.ensureQueryData(movementsQuery)]),
+    Promise.all([
+      context.queryClient.ensureQueryData(productsQuery),
+      context.queryClient.ensureQueryData(movementsQuery),
+      context.queryClient.ensureQueryData(adjustmentRequestsQuery),
+    ]),
   component: InventoryAdjustment,
 });
 
 function InventoryAdjustment() {
   const { data: products } = useSuspenseQuery(productsQuery);
   const { data: movements } = useSuspenseQuery(movementsQuery);
+  const { data: requests } = useSuspenseQuery(adjustmentRequestsQuery);
   const me = useMe();
+  const needsApproval = adjustmentNeedsApproval(me.role);
+  const [rejecting, setRejecting] = useState<AdjustmentRequest | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const pending = requests.filter((r) => r.status === "pendente");
   const notify = useNotify();
   const go = useGo();
   const queryClient = useQueryClient();
@@ -51,21 +60,41 @@ function InventoryAdjustment() {
   const confirm = async () => {
     if (!product) return;
     setBusy(true);
-    const { error: err } = await supabase.rpc("adjust_inventory", {
-      _product_id: product.id,
-      _counted: countedStock,
-      _reason: reason.trim(),
-    });
+    const args = { _product_id: product.id, _counted: countedStock, _reason: reason.trim() };
+    const { error: err } = needsApproval
+      ? await supabase.rpc("request_adjustment", args)
+      : await supabase.rpc("adjust_inventory", args);
     setBusy(false);
     setConfirming(false);
     if (err) return setError(errorMessage(err));
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["products"] }),
       queryClient.invalidateQueries({ queryKey: ["movements"] }),
+      queryClient.invalidateQueries({ queryKey: ["adjustment-requests"] }),
     ]);
     setReason("");
-    notify(`Inventário ajustado. Novo saldo: ${countedStock} unidade(s).`);
+    notify(needsApproval ? "Solicitação enviada. Um administrador vai aprovar ou recusar o ajuste." : `Inventário ajustado. Novo saldo: ${countedStock} unidade(s).`);
   };
+
+  const review = async (request: AdjustmentRequest, approve: boolean, note = "") => {
+    setBusy(true);
+    const { error: err } = await supabase.rpc("review_adjustment", { _request_id: request.id, _approve: approve, _note: note.trim() });
+    setBusy(false);
+    if (err) return notify(errorMessage(err), "error");
+    setRejecting(null);
+    setRejectNote("");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["products"] }),
+      queryClient.invalidateQueries({ queryKey: ["movements"] }),
+      queryClient.invalidateQueries({ queryKey: ["adjustment-requests"] }),
+    ]);
+    notify(approve ? `Ajuste aprovado. Novo saldo de ${request.product}: ${request.counted} un.` : "Solicitação recusada.");
+  };
+
+  const statusBadge = (r: AdjustmentRequest) =>
+    r.status === "pendente" ? <span className="badge warning"><i />Pendente</span>
+    : r.status === "aprovado" ? <span className="badge success"><i />Aprovado</span>
+    : <span className="badge danger"><i />Recusado</span>;
 
   return (
     <>
@@ -102,7 +131,7 @@ function InventoryAdjustment() {
               </Field>
               <div className="audit-info"><Icon name="clock" /><div><strong>Registro automático</strong><span>{formatNow()} · {me.fullName}</span></div></div>
               {error && <div className="inline-error"><Icon name="alert" />{error}</div>}
-              <Button type="submit">Revisar e confirmar ajuste</Button>
+              <Button type="submit">{needsApproval ? "Revisar e enviar solicitação" : "Revisar e confirmar ajuste"}</Button>
             </form>
           )}
         </section>
@@ -127,6 +156,56 @@ function InventoryAdjustment() {
           </section>
         </aside>
       </div>
+      <section className="card table-card adjustment-requests">
+        <div className="card-head">
+          <div>
+            <h2>{needsApproval ? "Minhas solicitações de ajuste" : "Solicitações de ajuste"}</h2>
+            <p>{needsApproval ? "Acompanhe a análise dos ajustes que você enviou" : `${pending.length} ${pending.length === 1 ? "solicitação pendente" : "solicitações pendentes"} de colaboradores`}</p>
+          </div>
+        </div>
+        {requests.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Produto</th><th>Saldo → Contagem</th><th>Motivo</th><th>Solicitante</th><th>Situação</th><th /></tr></thead>
+              <tbody>
+                {requests.map((r) => (
+                  <tr key={r.id}>
+                    <td><div className="product-cell"><div className="product-thumb">{r.product[0]}</div><div><strong>{r.product}</strong><span>{r.sku}</span></div></div></td>
+                    <td>{r.system_stock} → <strong>{r.counted}</strong> un. <span className={r.counted - r.system_stock >= 0 ? "positive" : "negative"}>({formatSigned(r.counted - r.system_stock)})</span></td>
+                    <td>{r.reason}{r.review_note && <small className="request-note">Análise: {r.review_note}</small>}</td>
+                    <td>{r.requester}<small className="request-note">{formatMovementDate(r.created_at)}</small></td>
+                    <td>{statusBadge(r)}{r.reviewer && <small className="request-note">por {r.reviewer}</small>}</td>
+                    <td>
+                      {!needsApproval && r.status === "pendente" && (
+                        <div className="row-actions">
+                          <button className="icon-button" disabled={busy} onClick={() => review(r, true)} title="Aprovar" aria-label={`Aprovar ajuste de ${r.product}`}><Icon name="check" size={18} /></button>
+                          <button className="icon-button" disabled={busy} onClick={() => setRejecting(r)} title="Recusar" aria-label={`Recusar ajuste de ${r.product}`}><Icon name="trash" size={18} /></button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="mini-empty">Nenhuma solicitação de ajuste registrada.</div>
+        )}
+      </section>
+      {rejecting && (
+        <Modal title="Recusar solicitação" subtitle={`${rejecting.product} · ${rejecting.requester}`} onClose={() => setRejecting(null)}>
+          <div className="modal-form">
+            <Field label="Motivo da recusa">
+              <textarea value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} maxLength={240} placeholder="Ex.: Recontagem não confirmou a divergência." />
+            </Field>
+            <footer>
+              <span />
+              <Button variant="secondary" onClick={() => setRejecting(null)}>Voltar</Button>
+              <Button variant="danger-ghost" disabled={busy || !rejectNote.trim()} onClick={() => review(rejecting, false, rejectNote)}>Recusar ajuste</Button>
+            </footer>
+          </div>
+        </Modal>
+      )}
       {confirming && product && (
         <Modal title="Confirmar ajuste de inventário" subtitle="Revise os dados antes de atualizar o saldo." onClose={() => setConfirming(false)}>
           <div className="adjustment-review">
@@ -142,11 +221,11 @@ function InventoryAdjustment() {
               <div><dt>Data e hora</dt><dd>{formatNow()}</dd></div>
               <div><dt>Motivo</dt><dd>{reason}</dd></div>
             </dl>
-            <div className="info-strip"><Icon name="alert" />Esta ação atualizará o estoque e criará um registro permanente no histórico.</div>
+            <div className="info-strip"><Icon name="alert" />{needsApproval ? "O estoque só será alterado depois que um administrador aprovar a solicitação." : "Esta ação atualizará o estoque e criará um registro permanente no histórico."}</div>
             <footer>
               <span />
               <Button variant="secondary" onClick={() => setConfirming(false)}>Voltar</Button>
-              <Button onClick={confirm} disabled={busy}>{busy ? "Salvando..." : "Confirmar ajuste"}</Button>
+              <Button onClick={confirm} disabled={busy}>{busy ? "Salvando..." : needsApproval ? "Enviar solicitação" : "Confirmar ajuste"}</Button>
             </footer>
           </div>
         </Modal>

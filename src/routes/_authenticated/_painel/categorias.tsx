@@ -4,19 +4,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button, Empty, Field, Icon, Modal, PageHead } from "@/components/ezstock/ui";
 import { errorMessage } from "@/lib/ezstock/data";
-import { categoriesQuery, type Category } from "@/lib/ezstock/queries";
+import { categoriesQuery, productsQuery, type Category } from "@/lib/ezstock/queries";
 import { ezHead } from "@/lib/ezstock/seo";
 import { useNotify } from "@/lib/ezstock/store";
 import { useMe } from "@/lib/ezstock/use-me";
+import { LinkedProductsModal } from "@/components/ezstock/linked-products";
 
 export const Route = createFileRoute("/_authenticated/_painel/categorias")({
   head: () => ezHead("Categorias", "Organize os produtos da loja em categorias para facilitar a gestão do estoque."),
-  loader: ({ context }) => context.queryClient.ensureQueryData(categoriesQuery),
+  loader: ({ context }) =>
+    Promise.all([context.queryClient.ensureQueryData(categoriesQuery), context.queryClient.ensureQueryData(productsQuery)]),
   component: Categories,
 });
 
 function Categories() {
   const { data: categories } = useSuspenseQuery(categoriesQuery);
+  const { data: products } = useSuspenseQuery(productsQuery);
+  const [viewing, setViewing] = useState<Category | null>(null);
+  const linked = (id: string) => products.filter((p) => p.category_id === id);
   const { isAdmin } = useMe();
   const notify = useNotify();
   const queryClient = useQueryClient();
@@ -58,9 +63,9 @@ function Categories() {
                 {rows.map((c) => (
                   <tr key={c.id}>
                     <td><strong>{c.name}</strong></td>
-                    <td>{c.productCount} {c.productCount === 1 ? "produto" : "produtos"}</td>
+                    <td>{linked(c.id).length} {linked(c.id).length === 1 ? "produto" : "produtos"}</td>
                     <td><span className={`badge ${c.active ? "success" : "neutral"}`}><i />{c.active ? "Ativa" : "Inativa"}</span></td>
-                    <td>{isAdmin && <button className="icon-button" onClick={() => setEditing(c)} aria-label={`Editar ${c.name}`}><Icon name="edit" size={18} /></button>}</td>
+                    <td><div className="row-actions"><button className="icon-button" onClick={() => setViewing(c)} title="Ver produtos" aria-label={`Ver produtos de ${c.name}`}><Icon name="eye" size={18} /></button>{isAdmin && <button className="icon-button" onClick={() => setEditing(c)} aria-label={`Editar ${c.name}`}><Icon name="edit" size={18} /></button>}</div></td>
                   </tr>
                 ))}
               </tbody>
@@ -86,6 +91,7 @@ function Categories() {
           </form>
         </Modal>
       )}
+      {viewing && <LinkedProductsModal title={`Produtos de ${viewing.name}`} products={linked(viewing.id)} onClose={() => setViewing(null)} />}
     </>
   );
 }
