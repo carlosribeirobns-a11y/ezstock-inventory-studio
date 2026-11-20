@@ -6,4 +6,4 @@
 - [x] Roles Admin/Colaborador enforced on the server; admin manages users
 - [x] Atomic stock movements and inventory adjustments (never negative, permanent history)
 - [x] Real dashboard, history filters/export and reports from saved data
-- [ ] Verify end-to-end signed in as admin and collaborator
+- [x] Verify end-to-end signed in as admin and collaborator

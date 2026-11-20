@@ -27,28 +27,28 @@
       "source": "in-memory seed arrays (products, movements, categories, suppliers, users)",
       "outcome": "migrate",
       "status": "verified",
-      "next_action": "None"
+      "next_action": "None (sample categories, suppliers and products seeded at user request)"
     },
     {
       "capability": "schema",
       "source": "absent (no database)",
-      "outcome": "not_applicable",
+      "outcome": "migrate",
       "status": "verified",
-      "next_action": "None unless user asks for a real backend"
+      "next_action": "None (Lovable Cloud tables with RLS)"
     },
     {
       "capability": "auth identities",
       "source": "demo-only login, no real accounts",
-      "outcome": "preserve_demo",
+      "outcome": "migrate",
       "status": "verified",
-      "next_action": "Demo login kept as in source; awaiting user answer on whether to add real accounts with Lovable Cloud"
+      "next_action": "None (no source users existed; first-admin setup + admin-created accounts verified)"
     },
     {
       "capability": "authorization",
       "source": "client-side role gating (Administrador / Colaborador)",
       "outcome": "migrate",
       "status": "verified",
-      "next_action": "None"
+      "next_action": "None (roles enforced by RLS and server functions)"
     },
     {
       "capability": "uploaded file bytes",
